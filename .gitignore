@@ -1,0 +1,62 @@
+# =============================================
+# NEXXT EFFECTS BUNDLE — .gitignore
+# =============================================
+
+# Node modules (restore com: npm install)
+node_modules/
+
+# Logs e caches do sistema
+*.log
+*.lock
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Certificados e assinaturas ZXP (não versionar)
+*.p12
+*.pfx
+*.cer
+*.crt
+*.csr
+*.key
+
+# ZXP gerado (gerado via build — não precisa versionar)
+*.zxp
+
+# PyCache (tools Python)
+__pycache__/
+*.pyc
+*.pyo
+
+# Arquivos temporários Adobe
+.debug
+*.bak
+*.tmp
+
+# Variáveis de ambiente locais (se usado no futuro)
+.env
+.env.local
+.env.*.local
+
+# Pasta de build local (se criada)
+dist/
+build/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Pastas de saída geradas pelo plugin
+Nexxt_Downloads/
+
+# Assets de vídeo locais (grandes demais para git)
+vari-assets/
+Assets/
+Mogrts/
+Mogrts_Nexxt/
+Assets_Nexxt/
+
+# Arquivos de teste
+test_*.js

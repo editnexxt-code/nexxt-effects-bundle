@@ -1,0 +1,18 @@
+# EditorConfig - enforces consistent encoding across all editors
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+[*.{html,js,jsx,css,json,xml,md}]
+charset = utf-8
+# IMPORTANT: utf-8 here means WITHOUT BOM. Never use utf-8-bom.
+# Using PowerShell Set-Content -Encoding UTF8 adds a BOM and WILL corrupt this project.
+# Always use Node.js fs.writeFileSync(path, content, 'utf8') for programmatic writes.

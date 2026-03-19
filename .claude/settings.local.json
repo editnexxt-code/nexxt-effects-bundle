@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew list:*)",
+      "Bash(defaults read:*)",
+      "Bash(find '/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle' -type f -name *.exe -o -name *.bat)",
+      "Bash(head -10 grep -n \"ffmpegExe\\\\|ffmpeg_path\\\\|var ffmpeg\\\\|const ffmpeg\\\\|let ffmpeg\" \"/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle/ai_director.js\")",
+      "Bash(head -10 grep -n \"ffmpegExe\\\\|ffmpeg_path\\\\|var ffmpeg\\\\|const ffmpeg\\\\|let ffmpeg\" \"/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle/vsl_detector.js\")",
+      "Bash(npm --version)",
+      "Bash(sudo chmod:*)",
+      "Bash(brew --version)",
+      "Bash(xattr \"/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle/tools/yt-dlp\")",
+      "Bash(xattr \"/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle/tools/ffmpeg\")",
+      "Read(//opt/homebrew/Cellar/yt-dlp/2026.3.13/libexec/bin/**)",
+      "Read(//opt/homebrew/Cellar/ffmpeg/8.0.1_4/bin/**)",
+      "Bash(du -sh /Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle/vari-assets/*/)",
+      "Bash(curl -s https://api.github.com/repos/Adobe-CEP/CEP-Resources/contents/ZXPSignCMD)",
+      "Bash(chmod +x ~/Downloads/ZXPSign/ZXPSignCmd xattr -d com.apple.quarantine ~/Downloads/ZXPSign/ZXPSignCmd)",
+      "Bash(curl -s https://api.github.com/repos/Adobe-CEP/CEP-Resources/contents/)",
+      "Bash(unzip -l \"/Users/nexxtedit/Desktop/NexxtEffectsBundle_v2.0.2_mac.zxp\")",
+      "Bash(find '/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle' -type f -name *.yml -o -name *.yaml -o -name Makefile -o -name *release* -o -name *update*)",
+      "Bash(grep -r \"github.com\\\\|gitlab.com\\\\|bitbucket\" '/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle' --include=*.js --include=*.json)"
+    ]
+  }
+}
