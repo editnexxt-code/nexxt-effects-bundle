@@ -3,7 +3,7 @@
 # Nexxt_Setup.sh — Instalador para macOS
 # Nexxt Effects Bundle v2.0.3
 # =============================================
-# Uso: bash Nexxt_Setup.sh
+# Uso: bash ~/Downloads/Nexxt_Setup.sh
 # =============================================
 
 echo ""
