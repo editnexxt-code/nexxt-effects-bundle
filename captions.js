@@ -40,7 +40,7 @@ let processoCancelado = false;
  * Verifica se a pasta ~/Documents/Nexxt_Mogrts estí vazia.
  * Se sim, baixa os MOGRTs da nuvem e extrai lí.
  */
-async function instalarMogrtsSeNecessario() {
+async function instalarMogrtsSeNecessario(force) {
     const fs = require('fs');
     const path = require('path');
     const os = require('os');
@@ -49,9 +49,9 @@ async function instalarMogrtsSeNecessario() {
     const destDir = path.join(os.homedir(), 'Documents', 'Nexxt_Mogrts');
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-    // Se jí existem MOGRTs, núo precisa baixar novamente
+    // Se já existem MOGRTs, não precisa baixar novamente (a menos que force=true)
     const existing = fs.readdirSync(destDir).filter(f => f.endsWith('.mogrt'));
-    if (existing.length > 0) return;
+    if (existing.length > 0 && !force) return;
 
     const listContainer = document.getElementById('mogrt-list');
 
@@ -100,9 +100,9 @@ async function instalarMogrtsSeNecessario() {
                         Baixe o arquivo e extraia os MOGRTs para:<br>
                         <span style="color:var(--accent-primary,#6366f1);font-size:10px;">Documentos/Nexxt_Mogrts</span>
                     </div>
-                    <button onclick="(window.csInterface||csInterface).openURLInDefaultBrowser('https://github.com/editnexxt-code/Releases/releases/latest')"
+                    <button onclick="instalarMogrtsSeNecessario(true)"
                         style="padding:9px 14px;background:var(--accent-primary,#6366f1);border:none;border-radius:8px;color:white;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px;">
-                         Baixar Templates Manualmente
+                        ↓ Reinstalar Templates
                     </button>
                     <button onclick="instalarMogrtsSeNecessario()"
                         style="padding:8px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.6);font-size:11px;cursor:pointer;width:100%;">
@@ -130,28 +130,9 @@ async function instalarMogrtsSeNecessario() {
         // ===========================================================
         setUI('', 'Verificando pacotes dispon¡veis...', null, true);
 
-        let downloadUrl = null;
-        let fileName = null;
-
-        try {
-            const apiResp = await fetch('https://api.github.com/repos/editnexxt-code/Releases/releases/latest');
-            const releaseData = await apiResp.json();
-            // Procura qualquer asset que comece com 'Nexxt_Mogrts' (.zip ou .rar)
-            const asset = (releaseData.assets || []).find(a => /^Nexxt_Mogrts\.(zip|rar)$/i.test(a.name));
-            if (asset) {
-                downloadUrl = asset.browser_download_url;
-                fileName = asset.name;
-            }
-        } catch (apiErr) {
-            console.warn('[instalarMogrts] GitHub API falhou, usando URL de fallback:', apiErr);
-        }
-
-        // Fallback caso a API falhe ou núo encontre o asset
-        // IMPORTANTE: sempre usar .zip funciona em qualquer OS sem depend¬ncia externa
-        if (!downloadUrl) {
-            downloadUrl = 'https://github.com/editnexxt-code/Releases/releases/download/v1.2.0/Nexxt_Mogrts.zip';
-            fileName = 'Nexxt_Mogrts.zip';
-        }
+        // URL direta — MOGRTs estão na release v1.1.1 (separada da release do plugin)
+        const downloadUrl = 'https://github.com/editnexxt-code/Releases/releases/download/v1.1.1/Nexxt_Mogrts.zip';
+        const fileName = 'Nexxt_Mogrts.zip';
 
         // Forºa tratamento como ZIP se a extensúo for .rar mas temos .zip dispon¡vel
         // (o GitHub sempre terí .zip a partir de agora)

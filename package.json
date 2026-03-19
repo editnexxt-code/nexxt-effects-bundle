@@ -1,0 +1,8 @@
+{
+  "name": "nexxt-effects-bundle",
+  "version": "2.0.8",
+  "description": "Nexxt Effects Bundle panel for Adobe Premiere Pro",
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}

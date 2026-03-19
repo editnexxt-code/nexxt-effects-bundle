@@ -143,7 +143,7 @@ let autoBleepCustom = localStorage.getItem("auto_bleep_custom") === "true";
 // O modal aparece automaticamente quando o usuário abre o plugin
 // pela primeira vez após uma atualização.
 // ---------------------------------------------------------------
-const NEXXT_VERSION = "2.0.7";
+const NEXXT_VERSION = "2.0.8";
 const NEXXT_CHANGELOG = [
     "Nova correção CRÍTICA para a Ferramenta de VSL Detector (Correção do corte do texto aos 30 segundos)",
     "Nova correção CRÍTICA da Ferramenta de VSL Detector (Modelo de Visão restaurado na nuvem)",

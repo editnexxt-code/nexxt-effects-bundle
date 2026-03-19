@@ -10,10 +10,11 @@
 (function () {
     'use strict';
 
-    var GROQ_VISION_MODEL = 'llama-3.2-90b-vision-preview';
-    var BATCH_SIZE        = 8;    // frames per API call — 1 call counts as 1 request regardless of images
-    var BATCH_DELAY_MS    = 2000; // delay between batch calls: 4 calls × (2s + ~4s API) = ~24s
-    var MAX_FRAMES        = 30;   // 30 frames ÷ 8 = 4 API calls total
+    var GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    var BATCH_SIZE        = 4;    // Llama 4 Scout: máx 4 imagens por chamada
+    var BATCH_DELAY_MS    = 1500; // delay entre batches
+    var MAX_FRAMES        = 90;   // cobertura total — 90 frames / vídeo
+    var MIN_INTERVAL_SEC  = 5;    // mínimo 1 frame a cada 5s
 
     function getGroqKey() {
         var stored = localStorage.getItem('groq_api_key');
@@ -76,7 +77,7 @@
                     }
 
                     var maxDur  = Math.min(duration, 3600);
-                    var interval = Math.max(10, Math.ceil(maxDur / MAX_FRAMES));
+                    var interval = Math.max(MIN_INTERVAL_SEC, Math.ceil(maxDur / MAX_FRAMES));
                     var estFrames = Math.ceil(maxDur / interval);
                     var estSec    = Math.ceil((estFrames / BATCH_SIZE) * 6);
                     log('Video: ' + fmtDur(maxDur) + ' · ' + estFrames + ' frames · ~' + estSec + 's · Groq Vision');
@@ -207,31 +208,28 @@
         var fs = require('fs');
         var n  = imagePaths.length;
 
-        var batchPrompt =
-            'Analyze these ' + n + ' video frames (labeled Frame 1 to Frame ' + n + ').\n' +
-            'Each frame is from a health supplement sales video.\n\n' +
-            'For EACH frame:\n' +
-            '- If a supplement product (bottle, jar, pouch, capsule container) is VISIBLE: write the brand/product name as shown on the label (1-5 words).\n' +
-            '- If NO supplement product is visible: write NONE.\n\n' +
-            'Reply with EXACTLY ' + n + ' lines, one per frame:\n' +
-            'Frame 1: [name or NONE]\n' +
-            'Frame 2: [name or NONE]\n' +
-            '...\n' +
-            'Frame ' + n + ': [name or NONE]\n\n' +
-            'No other text. Just the ' + n + ' lines.';
-
-        var content = [{ type: 'text', text: batchPrompt }];
+        // Formato intercalado: label → imagem → label → imagem (padrão Llama 4 Scout)
+        var content = [];
         for (var i = 0; i < imagePaths.length; i++) {
             var imageData = fs.readFileSync(imagePaths[i]).toString('base64');
+            content.push({ type: 'text', text: 'Frame ' + (i + 1) + ':' });
             content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + imageData } });
         }
+        content.push({ type: 'text', text:
+            'Look at each of the ' + n + ' frames above.\n' +
+            'For EACH frame: if any physical product (bottle, jar, pote, box, pouch, sachet, pill bottle, tube) ' +
+            'has a readable brand name or label visible — write that name exactly as it appears.\n' +
+            'If no product with a readable label is present, write NONE.\n\n' +
+            'Reply with EXACTLY ' + n + ' lines, no extra text:\n' +
+            Array.from({length: n}, function(_, k) { return 'Frame ' + (k+1) + ': [brand name or NONE]'; }).join('\n')
+        });
 
         var response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + gKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: GROQ_VISION_MODEL,
-                max_tokens: n * 25,
+                max_tokens: Math.max(n * 60, 512),
                 temperature: 0.1,
                 messages: [{ role: 'user', content: content }]
             })
@@ -277,7 +275,7 @@
         t = t.replace(/[.!?,;:]+$/, '').trim();
 
         // Too long = probably a description, not a name
-        if (t.length < 2 || t.length > 50) return null;
+        if (t.length < 2 || t.length > 80) return null;
 
         // Still a no
         if (/^(no\b|none|the image|the photo|this image|there is|i see no|not a|cannot)/i.test(t)) return null;
@@ -385,7 +383,7 @@
         if (!text) return [];
         var gKey = getGroqKey();
         if (!gKey) return [];
-        var sys  = 'You identify health supplement brand names in VSL transcripts. These are invented brand names: 1-3 words combining health concepts, body parts, actions, or exotic words. Examples of the PATTERN: "NeuroPrime", "Sugar Defender", "QuietumPlus", "Mitolyn", "ProstaVive". A NEW product follows the same pattern. Reply ONLY with a JSON array: ["Name1","Name2"]. If none found: []';
+        var sys  = 'You identify health supplement and consumer product brand names in VSL transcripts. These are invented brand names: 1-4 words combining health concepts, body parts, actions, colors, or exotic words. Examples: "NeuroPrime", "Sugar Defender", "QuietumPlus", "Mitolyn", "ProstaVive", "HunterPower", "Slim Jara", "Slimberry", "HunterBurn", "Biofit", "Ignite", "Alpilean". Brazilian/Portuguese products often combine English roots with Portuguese-style endings. Reply ONLY with a JSON array: ["Name1","Name2"]. If none found: []';
         var msg  = 'Transcript: "' + text.replace(/"/g, "'").substring(0, 40000) + '"\n\nList all supplement brand names:';
 
         try {
