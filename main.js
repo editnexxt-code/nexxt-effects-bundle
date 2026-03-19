@@ -137,7 +137,7 @@ let autoBleepCustom = localStorage.getItem("auto_bleep_custom") === "true";
 // O modal aparece automaticamente quando o usuário abre o plugin
 // pela primeira vez após uma atualização.
 // ---------------------------------------------------------------
-const NEXXT_VERSION = "2.0.2";
+const NEXXT_VERSION = "2.0.3";
 const NEXXT_CHANGELOG = [
     "VSL Detector: marcadores do Premiere criados automaticamente em cada produto detectado",
     "VSL Detector: batching de 8 frames por chamada - rate limit praticamente impossivel",
