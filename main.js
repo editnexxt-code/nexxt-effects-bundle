@@ -223,9 +223,24 @@ async function verificarAtualizacao() {
         const response = await fetch(urlJSON + "?t=" + Date.now());
         const remoteInfo = await response.json();
 
-        // Limpa as versões para comparar (remove 'v' etc e converte pra float/array)
-        const vLocal = NEXXT_VERSION.replace(/[^0-9.]/g, '').split('.').map(Number);
-        const vRemota = remoteInfo.version.replace(/[^0-9.]/g, '').split('.').map(Number);
+        // ── DETECÇÃO DE PLATAFORMA ────────────────────────────────────────────────
+        // O version.json remoto usa campos por OS:
+        // { "mac": {"version":"2.0.3","url":"...","changelog":[]},
+        //   "windows": {"version":"2.0.5","url":"...","changelog":[]} }
+        // Fallback: campo genérico "version" (formato legado)
+        const _isMac = (typeof process !== 'undefined' && process.platform === 'darwin');
+        const _platformKey = _isMac ? 'mac' : 'windows';
+        const platformInfo = remoteInfo[_platformKey] || remoteInfo;
+        const versionRemota = (platformInfo.version || remoteInfo.version || '0.0.0');
+        const infoFinal = {
+            version:   versionRemota,
+            url:       platformInfo.url       || remoteInfo.url       || '',
+            changelog: platformInfo.changelog || remoteInfo.changelog || []
+        };
+
+        // Limpa as versões para comparar (remove 'v' etc e converte pra array numérico)
+        const vLocal  = NEXXT_VERSION.replace(/[^0-9.]/g, '').split('.').map(Number);
+        const vRemota = versionRemota.replace(/[^0-9.]/g, '').split('.').map(Number);
 
         let hasUpdate = false;
         for (let i = 0; i < Math.max(vLocal.length, vRemota.length); i++) {
@@ -236,8 +251,8 @@ async function verificarAtualizacao() {
         }
 
         if (hasUpdate) {
-            try { if (localStorage.getItem('nexxt_update_snoozed') === remoteInfo.version) { mostrarModalAtualizacao(); return; } } catch (e) { }
-            mostrarAvisoNovaVersao(remoteInfo);
+            try { if (localStorage.getItem('nexxt_update_snoozed') === infoFinal.version) { mostrarModalAtualizacao(); return; } } catch (e) { }
+            mostrarAvisoNovaVersao(infoFinal);
         } else {
             // Se não tem att nova, mostra o modal do nosso changelog local se ele for novo para o user
             mostrarModalAtualizacao();
