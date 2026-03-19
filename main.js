@@ -1717,40 +1717,27 @@ async function iniciarDownloadNSFW(tipo, res, btn) {
         args = ["--newline", "--no-warnings", "--no-mtime", "--restrict-filenames", "-S", "vcodec:h264,acodec:m4a", "--merge-output-format", "mp4", "--recode-video", "mp4", "--no-playlist", "--write-thumbnail", "-o", `${baseDir}/${uniqueId}_[${siteName}]_%(title)s.%(ext)s`, url];
     }
 
-    // A gringa NSFW ativa Cloudflare agressivo (HTTP 404/403) em scrapers headless. 
-    // Usamos o curl-cffi engine interno ou injetamos cookies reais do Playwright.
+    // ── BYPASS ANTI-SCRAPING ─────────────────────────────────────────────────
+    // Estratégia 1: cookies-from-browser (usa sessão real do usuário no Chrome/Safari)
+    // Estratégia 2: impersonate chrome (mascara TLS como Chrome real — sem dependência externa)
+    progressStatus.innerText = 'Configurando acesso seguro...';
 
-    // Gerar cookies reais via Playwright (Bypass Firewall definitivo)
-    progressStatus.innerText = 'Forjando assinatura segura (Playwright)...';
-    const cookiePath = path.join(baseDir, 'sess_nsfw.txt');
+    const isSitePremium = urlLower.includes('pornhub') || urlLower.includes('xvideos') ||
+        urlLower.includes('spankbang') || urlLower.includes('redtube') ||
+        urlLower.includes('xnxx') || urlLower.includes('eporner') || urlLower.includes('xhamster');
 
-    try {
-        const util = require('util');
-        const execFile = util.promisify(require('child_process').execFile);
-
-        let targetDomain = url;
-        if (urlLower.includes('pornhub')) targetDomain = 'https://www.pornhub.com/';
-        else if (urlLower.includes('xvideos')) targetDomain = 'https://www.xvideos.com/';
-        else if (urlLower.includes('spankbang')) targetDomain = 'https://spankbang.com/';
-
-        // Call the isolated Node script to prevent CEP Chromium crashes
-        const scriptPath = path.join(__dirname, 'nsfw_cookie_extractor.js');
-        const { stdout, stderr } = await execFile('node', [scriptPath, targetDomain, cookiePath], { env: process.env, shell: true });
-
-        if (fs.existsSync(cookiePath)) {
-            args.splice(0, 0, "--cookies", cookiePath);
-            args.splice(0, 0, "--add-header", `Referer: ${targetDomain}`);
-            console.log("Cookies forjados com sucesso!");
-        } else {
-            throw new Error("Arquivo de cookies no foi gerado.");
+    if (isSitePremium) {
+        // Estratégia 1: tentar extrair cookies do Chrome instalado (acesso real de usuário logado)
+        const _isMacOS = (typeof process !== 'undefined' && process.platform === 'darwin');
+        try {
+            const cookiesFromBrowser = _isMacOS ? 'chrome' : 'chrome';
+            args.splice(0, 0, '--cookies-from-browser', cookiesFromBrowser);
+            console.log('[NSFW] Usando cookies do browser:', cookiesFromBrowser);
+        } catch (e) {
+            console.warn('[NSFW] Falha ao usar cookies do browser, usando impersonation:', e.message);
         }
-
-    } catch (err) {
-        console.error("Erro ao forjar cookies:", err);
-        // Fallback: Tenta a mascarao de TLS interna
-        if (urlLower.includes('pornhub') || urlLower.includes('xvideos') || urlLower.includes('spankbang') || urlLower.includes('redtube') || urlLower.includes('xnxx') || urlLower.includes('eporner')) {
-            args.splice(0, 0, "--impersonate", "Chrome-120");
-        }
+        // Estratégia 2: impersonate chrome (TLS fingerprint — sempre ativo como camada extra)
+        args.splice(0, 0, '--impersonate', 'chrome');
     }
 
     if (dlStart || dlEnd) {
