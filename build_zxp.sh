@@ -7,7 +7,7 @@ set -e
 
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_NAME="NexxtEffectsBundle"
-VERSION="2.0.3"
+VERSION="2.0.6"
 ZXP_NAME="${PLUGIN_NAME}-${VERSION}.zxp"
 OUT_DIR="$PLUGIN_DIR"
 STAGING_DIR="/tmp/nexxt_zxp_staging_$$"

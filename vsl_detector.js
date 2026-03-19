@@ -78,7 +78,7 @@
                     var maxDur  = Math.min(duration, 3600);
                     var interval = Math.max(10, Math.ceil(maxDur / MAX_FRAMES));
                     var estFrames = Math.ceil(maxDur / interval);
-                    var estSec    = Math.ceil(estFrames * FRAME_DELAY_MS / 1000);
+                    var estSec    = Math.ceil((estFrames / BATCH_SIZE) * 6);
                     log('Video: ' + fmtDur(maxDur) + ' · ' + estFrames + ' frames · ~' + estSec + 's · Groq Vision');
 
                     // ── STEP 1: Extract frames ───────────────────────────────
@@ -293,8 +293,9 @@
         var cp   = require('child_process');
         var os   = require('os');
 
-        var extPath   = csInterface.getSystemPath(SystemPath.EXTENSION);
-        var _ffmpegLocal = path.join(extPath, 'tools', 'ffmpeg' + (process.platform === 'win32' ? '.exe' : ''));
+        var _ffmpegLocal = typeof PLUGIN_TOOLS_DIR !== 'undefined' && PLUGIN_TOOLS_DIR 
+                           ? path.join(PLUGIN_TOOLS_DIR, 'ffmpeg' + (process.platform === 'win32' ? '.exe' : '')) 
+                           : path.join(csInterface.getSystemPath(SystemPath.EXTENSION), 'tools', 'ffmpeg' + (process.platform === 'win32' ? '.exe' : ''));
         var ffmpegExe = fs.existsSync(_ffmpegLocal) ? _ffmpegLocal : 'ffmpeg';
         var dir       = path.join(os.tmpdir(), 'vsl_frames_' + Date.now());
         fs.mkdirSync(dir, { recursive: true });
@@ -335,8 +336,9 @@
         var cp   = require('child_process');
         var os   = require('os');
 
-        var extPath   = csInterface.getSystemPath(SystemPath.EXTENSION);
-        var _ffmpegLocal = path.join(extPath, 'tools', 'ffmpeg' + (process.platform === 'win32' ? '.exe' : ''));
+        var _ffmpegLocal = typeof PLUGIN_TOOLS_DIR !== 'undefined' && PLUGIN_TOOLS_DIR 
+                           ? path.join(PLUGIN_TOOLS_DIR, 'ffmpeg' + (process.platform === 'win32' ? '.exe' : '')) 
+                           : path.join(csInterface.getSystemPath(SystemPath.EXTENSION), 'tools', 'ffmpeg' + (process.platform === 'win32' ? '.exe' : ''));
         var ffmpegExe = fs.existsSync(_ffmpegLocal) ? _ffmpegLocal : 'ffmpeg';
         var outMp3    = path.join(os.tmpdir(), 'vsl_audio_' + Date.now() + '.mp3');
 
@@ -381,30 +383,37 @@
 
     async function extractProductNamesFromText(text) {
         if (!text) return [];
-        var rKey = getReplicateKey();
+        var gKey = getGroqKey();
+        if (!gKey) return [];
         var sys  = 'You identify health supplement brand names in VSL transcripts. These are invented brand names: 1-3 words combining health concepts, body parts, actions, or exotic words. Examples of the PATTERN: "NeuroPrime", "Sugar Defender", "QuietumPlus", "Mitolyn", "ProstaVive". A NEW product follows the same pattern. Reply ONLY with a JSON array: ["Name1","Name2"]. If none found: []';
         var msg  = 'Transcript: "' + text.replace(/"/g, "'").substring(0, 2000) + '"\n\nList all supplement brand names:';
 
         try {
-            var r = await fetch('https://api.replicate.com/v1/models/meta/meta-llama-3-8b-instruct/predictions', {
+            var response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
-                headers: { 'Authorization': 'Token ' + rKey, 'Content-Type': 'application/json', 'Prefer': 'wait' },
-                body: JSON.stringify({ input: { prompt: msg, system_prompt: sys, max_new_tokens: 300, temperature: 0.1 } })
+                headers: { 'Authorization': 'Bearer ' + gKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'llama-3.3-70b-versatile',
+                    temperature: 0.1,
+                    messages: [
+                        { role: 'system', content: sys },
+                        { role: 'user', content: msg }
+                    ]
+                })
             });
-            var d = await r.json();
-            if (!r.ok) return [];
-            var max = 20;
-            while (d.status !== 'succeeded' && d.status !== 'failed' && max-- > 0) {
-                await sleep(2000);
-                var p = await fetch('https://api.replicate.com/v1/predictions/' + d.id, { headers: { 'Authorization': 'Token ' + rKey } });
-                d = await p.json();
-            }
-            if (d.status !== 'succeeded') return [];
-            var match = (d.output || []).join('').match(/\[[\s\S]*?\]/);
+            var d = await response.json();
+            if (!response.ok) return [];
+            
+            var outText = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+            var match = outText.match(/\[[\s\S]*?\]/);
             if (!match) return [];
+            
             var arr = JSON.parse(match[0]);
             return Array.isArray(arr) ? arr.filter(function (n) { return typeof n === 'string' && n.trim(); }) : [];
-        } catch (e) { return []; }
+        } catch (e) {
+            console.warn('[VSL Text Extraction Error]', e);
+            return [];
+        }
     }
 
     function findProductMentions(words, names, clipStart) {
