@@ -10,7 +10,7 @@
 (function () {
     'use strict';
 
-    var GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    var GROQ_VISION_MODEL = 'llama-3.2-90b-vision-preview';
     var BATCH_SIZE        = 8;    // frames per API call — 1 call counts as 1 request regardless of images
     var BATCH_DELAY_MS    = 2000; // delay between batch calls: 4 calls × (2s + ~4s API) = ~24s
     var MAX_FRAMES        = 30;   // 30 frames ÷ 8 = 4 API calls total
@@ -254,7 +254,7 @@
         var answers = new Array(n).fill('NONE');
         var lines   = text.split('\n');
         for (var li = 0; li < lines.length; li++) {
-            var m = lines[li].match(/Frame\s*(\d+)\s*:\s*(.+)/i);
+            var m = lines[li].replace(/\*/g, '').match(/(?:Frame|Quadro)\s*(\d+)\s*[:-]\s*(.+)/i);
             if (m) {
                 var idx = parseInt(m[1], 10) - 1; // 0-based
                 if (idx >= 0 && idx < n) answers[idx] = m[2].trim();
@@ -386,7 +386,7 @@
         var gKey = getGroqKey();
         if (!gKey) return [];
         var sys  = 'You identify health supplement brand names in VSL transcripts. These are invented brand names: 1-3 words combining health concepts, body parts, actions, or exotic words. Examples of the PATTERN: "NeuroPrime", "Sugar Defender", "QuietumPlus", "Mitolyn", "ProstaVive". A NEW product follows the same pattern. Reply ONLY with a JSON array: ["Name1","Name2"]. If none found: []';
-        var msg  = 'Transcript: "' + text.replace(/"/g, "'").substring(0, 2000) + '"\n\nList all supplement brand names:';
+        var msg  = 'Transcript: "' + text.replace(/"/g, "'").substring(0, 40000) + '"\n\nList all supplement brand names:';
 
         try {
             var response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
