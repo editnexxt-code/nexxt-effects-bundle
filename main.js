@@ -6,22 +6,17 @@
 
 // -- NEXXT GLOBAL NAMESPACE (required by heygen_studio.js) ------
 // INJEÇÃO GLOBAL DE PATH NODE.JS: garante FFmpeg e ferramentas
-// NEXXT: resolve o caminho real do plugin via CEP (csInterface ainda não existe aqui,
-// então usamos window.location para derivar o diretório raiz do plugin)
+// NEXXT: resolve o caminho real do plugin
 var PLUGIN_TOOLS_DIR = '';
 var _IS_WIN = process.platform === 'win32';
 var _EXE = _IS_WIN ? '.exe' : '';
 try {
     const _path = require('path');
-    const _href = decodeURIComponent(window.location.href);
-    // Cross-platform: file:///C:/... (Win) vs file:///Library/... (Mac)
-    let _filePath;
-    try {
-        _filePath = new URL(_href).pathname;
-        if (_IS_WIN) _filePath = _filePath.replace(/^\//, ''); // /C:/... -> C:/...
-    } catch (e) {
-        _filePath = _href.replace(/^file:\/\/\//, '');
-        if (_IS_WIN) _filePath = _filePath.replace(/\//g, '\\');
+    // Abordagem robusta para CEP macOS e Windows
+    // window.location.pathname retém %20, precisamos de decodeURI
+    let _filePath = decodeURI(window.location.pathname);
+    if (_IS_WIN && _filePath.startsWith('/')) {
+        _filePath = _filePath.substring(1); // remove '/' inicial no windows (/C:/...)
     }
     const _pluginRoot = _path.dirname(_filePath);
     PLUGIN_TOOLS_DIR = _path.join(_pluginRoot, 'tools');
@@ -1086,9 +1081,10 @@ function handleAudioAI(tipo) {
         const tempDir = objOs.tmpdir();
         const tmpAudioPath = path.join(tempDir, `isolate_nexxt_${Date.now()}.mp3`);
 
-        const ffmpegCmd = `ffmpeg -y -ss ${inPoint} -i "${caminhoAudio}" -t ${duration} -c:a libmp3lame -q:a 2 "${tmpAudioPath}"`;
+        const _ffmpegBin = (typeof PLUGIN_TOOLS_DIR !== 'undefined' && PLUGIN_TOOLS_DIR ? require('path').join(PLUGIN_TOOLS_DIR, 'ffmpeg' + (process.platform === 'win32' ? '.exe' : '')) : 'ffmpeg');
+        const argsFfmpeg = ['-y', '-ss', String(inPoint), '-i', caminhoAudio, '-t', String(duration), '-c:a', 'libmp3lame', '-q:a', '2', tmpAudioPath];
 
-        child_process.exec(ffmpegCmd, (err) => {
+        child_process.execFile(_ffmpegBin, argsFfmpeg, (err) => {
             if (err) {
                 btn.classList.remove('loading'); texto.innerText = originalText;
                 notify('Erro ao extrair áudio com FFmpeg. Ele está instalado?', 'error'); return;

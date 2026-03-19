@@ -654,12 +654,13 @@ if (document.getElementById('btn-generate-captions')) {
                 const spanInfo3 = btn.querySelector('.btn-text');
                 if (spanInfo3) spanInfo3.innerText = `Cortando üudio (${c + 1}/${clipsStr.length})...`;
 
+                const _cp = require('child_process');
                 const _ffmpegBin = (typeof PLUGIN_TOOLS_DIR !== 'undefined' && PLUGIN_TOOLS_DIR ? require('path').join(PLUGIN_TOOLS_DIR, 'ffmpeg' + (process.platform === 'win32' ? '.exe' : '')) : 'ffmpeg');
-                const cmd = `"${_ffmpegBin}" -y -ss ${inPoint} -i "${caminhoAudioOriginal}" -t ${duration} -ac 1 -ar 16000 -c:a pcm_s16le "${outputTempPath}"`;
+                const argsFfmpeg = ['-y', '-ss', String(inPoint), '-i', caminhoAudioOriginal, '-t', String(duration), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', outputTempPath];
 
                 try {
                     await new Promise((resolve, reject) => {
-                        processoFFmpeg = exec(cmd, (err) => {
+                        processoFFmpeg = _cp.execFile(_ffmpegBin, argsFfmpeg, (err) => {
                             if (err) reject(err); else resolve();
                         });
                     });
