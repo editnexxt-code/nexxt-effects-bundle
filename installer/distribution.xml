@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Nexxt Effects Bundle</title>
+    <background file="background.png" alignment="bottomleft" scaling="tofit"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <license file="license.txt" mime-type="text/plain"/>
+    <options customize="never" require-scripts="false" allow-external-scripts="false"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <pkg-ref id="com.nexxt.effects.installer"/>
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" title="Nexxt Effects Bundle">
+        <pkg-ref id="com.nexxt.effects.installer"/>
+    </choice>
+    <pkg-ref id="com.nexxt.effects.installer" version="0" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>

@@ -243,9 +243,10 @@ async function verificarAtualizacao() {
         const platformInfo = remoteInfo[_platformKey] || remoteInfo;
         const versionRemota = (platformInfo.version || remoteInfo.version || '0.0.0');
         const infoFinal = {
-            version:   versionRemota,
-            url:       platformInfo.url       || remoteInfo.url       || '',
-            changelog: platformInfo.changelog || remoteInfo.changelog || []
+            version:    versionRemota,
+            url:        platformInfo.url        || remoteInfo.url        || '',
+            update_url: platformInfo.update_url || remoteInfo.update_url || '',
+            changelog:  platformInfo.changelog  || remoteInfo.changelog  || []
         };
 
         // Limpa as versões para comparar (remove 'v' etc e converte pra array numérico)
@@ -346,7 +347,7 @@ function mostrarAvisoNovaVersao(remoteInfo) {
                 <button id="btn-update-download" style="
                     flex: 2;
                     padding: 12px;
-                    background: linear-gradient(135deg, #ef4444, #b91c1c);
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
                     border: none;
                     border-radius: 10px;
                     color: #fff;
@@ -355,8 +356,8 @@ function mostrarAvisoNovaVersao(remoteInfo) {
                     cursor: pointer;
                     transition: all 0.2s ease;
                     letter-spacing: 0.3px;
-                    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-                ">Baixar Atualização ZXP</button>
+                    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+                ">${remoteInfo.update_url ? 'Atualizar Agora' : 'Baixar Atualização'}</button>
             </div>
             
             <style>
@@ -393,21 +394,105 @@ function mostrarAvisoNovaVersao(remoteInfo) {
     overlay.querySelector('#btn-update-later').onclick = fechar;
 
     overlay.querySelector('#btn-update-download').onclick = () => {
-        try {
-            if (typeof csInterface !== 'undefined' && csInterface && csInterface.openURLInDefaultBrowser) {
-                csInterface.openURLInDefaultBrowser(remoteInfo.url);
-            } else {
-                var _cp = require('child_process');
-                if (process.platform === 'darwin') {
-                    _cp.exec('open "' + remoteInfo.url + '"');
+        if (remoteInfo.update_url) {
+            // Self-update via ZIP (instalação automática sem sair do Premiere)
+            aplicarAtualizacaoZIP(remoteInfo.update_url, remoteInfo.version, overlay);
+        } else {
+            // Fallback: abrir link de download no browser
+            try {
+                if (typeof csInterface !== 'undefined' && csInterface && csInterface.openURLInDefaultBrowser) {
+                    csInterface.openURLInDefaultBrowser(remoteInfo.url);
                 } else {
-                    _cp.exec('start "" "' + remoteInfo.url + '"');
+                    var _cp = require('child_process');
+                    if (process.platform === 'darwin') {
+                        _cp.exec('open "' + remoteInfo.url + '"');
+                    } else {
+                        _cp.exec('start "" "' + remoteInfo.url + '"');
+                    }
                 }
+            } catch (e) {
+                window.open(remoteInfo.url, '_blank');
             }
-        } catch (e) {
-            window.open(remoteInfo.url, '_blank');
         }
     };
+}
+
+// ── AUTO-UPDATE VIA ZIP ───────────────────────────────────────────────────────
+async function aplicarAtualizacaoZIP(updateUrl, newVersion, overlay) {
+    const btnDownload = overlay ? overlay.querySelector('#btn-update-download') : null;
+    const btnLater    = overlay ? overlay.querySelector('#btn-update-later')    : null;
+
+    if (btnDownload) { btnDownload.disabled = true; btnDownload.textContent = 'Baixando...'; }
+    if (btnLater)    { btnLater.disabled = true; }
+
+    try {
+        const path    = require('path');
+        const fs      = require('fs');
+        const os      = require('os');
+        const https   = require('https');
+        const cp      = require('child_process');
+        const AdmZip  = require('adm-zip');
+
+        const tmpZip  = path.join(os.tmpdir(), 'nexxt_update_' + Date.now() + '.zip');
+        const extDir  = csInterface.getSystemPath(SystemPath.EXTENSION);
+
+        // Download com progresso
+        await new Promise((resolve, reject) => {
+            const doDownload = (url, attempts) => {
+                if (attempts > 5) { reject(new Error('Muitos redirecionamentos')); return; }
+                https.get(url, (res) => {
+                    if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
+                        doDownload(res.headers.location, attempts + 1); return;
+                    }
+                    const total = parseInt(res.headers['content-length'] || '0', 10);
+                    let received = 0;
+                    const file = fs.createWriteStream(tmpZip);
+                    res.on('data', chunk => {
+                        received += chunk.length;
+                        if (btnDownload && total > 0) {
+                            const pct = Math.round(received / total * 100);
+                            btnDownload.textContent = 'Baixando ' + pct + '%';
+                        }
+                    });
+                    res.pipe(file);
+                    file.on('finish', () => { file.close(); resolve(); });
+                    file.on('error', reject);
+                }).on('error', reject);
+            };
+            doDownload(updateUrl, 0);
+        });
+
+        if (btnDownload) btnDownload.textContent = 'Instalando...';
+
+        // Extrair ZIP sobre o diretório do plugin
+        const zip = new AdmZip(tmpZip);
+        zip.extractAllTo(extDir, true);
+
+        // Remover quarantine nos novos arquivos
+        if (process.platform === 'darwin') {
+            cp.execSync('xattr -cr "' + extDir + '"', { stdio: 'ignore' });
+        }
+
+        // Limpar ZIP temporário
+        try { fs.unlinkSync(tmpZip); } catch (e) { }
+
+        // Feedback de sucesso e instrução para recarregar
+        if (overlay) {
+            overlay.querySelector('div').innerHTML = `
+                <div style="text-align:center; padding:20px;">
+                    <div style="font-size:48px; margin-bottom:12px;">✅</div>
+                    <h2 style="color:#10b981; margin:0 0 8px 0; font-size:18px;">Atualizado para v${newVersion}!</h2>
+                    <p style="color:rgba(255,255,255,0.7); font-size:13px; margin:0 0 20px 0;">Feche e reabra o painel para aplicar.</p>
+                    <button onclick="document.getElementById('nexxt-new-version-overlay').remove()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:12px 28px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">OK</button>
+                </div>`;
+        }
+
+    } catch (err) {
+        console.error('[AutoUpdate] Erro:', err);
+        if (btnDownload) { btnDownload.disabled = false; btnDownload.textContent = 'Tentar Novamente'; }
+        if (btnLater)    { btnLater.disabled = false; }
+        alert('Erro na atualização: ' + err.message + '\n\nBaixe manualmente em: ' + updateUrl);
+    }
 }
 
 

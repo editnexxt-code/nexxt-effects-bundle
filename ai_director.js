@@ -59,10 +59,10 @@
                         console.log("Audio extraído em: " + outWav);
                         try {
                             logEl.innerHTML = '<span style="color:#10b981;">Extração Concluída! Iniciando Transcrição...</span>';
-                            const transcript = await transcribeAudio(outWav, logEl);
+                            const transcript = await transcribeAudio(outWav);
                             
                             logEl.innerHTML = '<span style="color:#10b981;">Transcrição Concluída!</span><br/><em>"' + transcript + '"</em><br/><br/>Gerando Direção Criativa...';
-                            const aiResponse = await generateArtDirection(transcript, logEl);
+                            const aiResponse = await generateArtDirection(transcript);
                             
                             logEl.innerHTML = '<span style="color:#10b981;">Direção Gerada com Sucesso!</span>';
                             
@@ -71,7 +71,7 @@
                                 window.renderAIDirectorUI(aiResponse, transcript);
                             }
                         } catch (apiErr) {
-                            logEl.innerHTML = '<span style="color:#ef4444;">Erro na API Replicate: ' + apiErr.message + '</span>';
+                            logEl.innerHTML = '<span style="color:#ef4444;">Erro: ' + apiErr.message + '</span>';
                         }
                         
                     } else {
@@ -89,20 +89,8 @@
         });
     };
 
-    // Helper: Ler Audio como DataURI 
-    function getAudioDataURI(filePath) {
-        const fs = require('fs');
-        const audioBuffer = fs.readFileSync(filePath);
-        return 'data:audio/wav;base64,' + audioBuffer.toString('base64');
-    }
-
-    // Helper: Obter Chave da Replicate 
-    function getReplicateKey() {
-        return localStorage.getItem('nexxt_replicate_key') || 'REPLICATE_API_KEY_HERE';
-    }
-
-    // API: Whisper via Groq Proxy 
-    async function transcribeAudio(audioPath, logEl) {
+    // API: Whisper via Groq Proxy
+    async function transcribeAudio(audioPath) {
         const fs = require('fs');
         
         // Ler como ArrayBuffer para o FormData
@@ -136,76 +124,43 @@
         return data.text || ''; // Groq verbose_json returns text in .text
     }
 
-    // API: LLaMA-3 
-    async function generateArtDirection(transcript, logEl) {
-        const apiKey = getReplicateKey();
-        
-        const systemPrompt = `Você é um Diretor de Arte Sênior especializado em edição de vídeo moderna (VSLs, YouTube, automação).
-Com base no trecho de áudio/locução do usuário, sugira elementos de edição vitais para prender a atenção.
-Responda EXCLUSIVAMENTE em formato JSON VÁLIDO. Siga a estrutura:
-{
-  "stock_video": {
-    "keywords_en": ["palavra chave 1 raw footage", "palavra chave 2 no text", "palavra chave 3 aesthetic", "palavra chave 4 background"],
-    "description": "descrição curta do que mostrar na cena. A busca prioriza vídeos 'raw', 'no text', 'background' para evitar legendas embutidas."
-  },
-  "sound_design": {
-    "style": "estilo de som/musica",
-    "reason": "por que usar esse som"
-  },
-  "animation_idea": {
-    "fx_name": "qual efeito usar (ex: zoom in gradual, glitch, pop-up text)",
-    "description": "exatamente como animar para encaixar no tom da fala"
-  }
-}`;
+    // API: Direção de Arte via Groq (LLaMA-3)
+    async function generateArtDirection(transcript) {
+        const apiKey = (localStorage.getItem('groq_api_key') || '').trim();
+        if (!apiKey) throw new Error('Chave Groq não configurada. Acesse Configurações e insira sua chave Groq.');
 
-        const prompt = `A locução extraída deste trecho é: "${transcript}"\nMande o JSON com a direção de arte.`;
+        const systemPrompt = `You are a Senior Art Director specialized in modern video editing (VSLs, YouTube, TikTok).
+Based on the user's audio transcript, suggest powerful editing elements to maximize attention.
+ALL keywords_en values MUST be in English — this is critical for TikTok and YouTube searches.
+Reply ONLY with raw valid JSON, no markdown, no code blocks, no extra text. Use this exact structure:
+{"stock_video":{"keywords_en":["keyword1 no text","keyword2 raw footage","keyword3 aesthetic","keyword4 background"],"description":"Short description of what to show on screen."},"sound_design":{"style":"music/sound style","reason":"why this sound fits"},"animation_idea":{"fx_name":"effect name (e.g. zoom in, glitch, pop-up text)","description":"exactly how to animate it"}}`;
 
-        const payload = {
-            input: {
-                prompt: prompt,
-                system_prompt: systemPrompt,
-                max_new_tokens: 512,
-                temperature: 0.7
-            }
-        };
-
-        const response = await fetch('https://api.replicate.com/v1/models/meta/meta-llama-3-8b-instruct/predictions', {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Authorization': `Token ${apiKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'wait'
-            },
-            body: JSON.stringify(payload)
+            headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'llama-3.1-8b-instant',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: 'A locução extraída deste trecho é: "' + transcript + '"\nMande o JSON com a direção de arte.' }
+                ],
+                max_tokens: 1024,
+                temperature: 0.5
+            })
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Erro ao iniciar LLaMA-3');
+        if (!response.ok) throw new Error(data.error?.message || 'Erro na API Groq');
 
-        let predictionId = data.id;
-        let pData = data;
-
-        // Loop de Polling
-        while (pData.status !== "succeeded" && pData.status !== "failed" && pData.status !== "canceled") {
-            await new Promise(r => setTimeout(r, 2000));
-            const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-                headers: { 'Authorization': `Token ${apiKey}` }
-            });
-            pData = await pollRes.json();
-        }
-
-        if (pData.status !== "succeeded") {
-            throw new Error('Falha no LLaMA-3: ' + pData.error);
-        }
-
-        const rawOutput = pData.output.join('');
-        
-        // Parsear o JSON bloque do output do Llama
+        const rawOutput = data.choices?.[0]?.message?.content || '';
         try {
-            const jsonStr = rawOutput.match(/\{[\s\S]*\}/)[0];
-            return JSON.parse(jsonStr);
+            // find first { and last } to extract complete JSON block
+            const start = rawOutput.indexOf('{');
+            const end = rawOutput.lastIndexOf('}');
+            if (start === -1 || end === -1) throw new Error('no braces');
+            return JSON.parse(rawOutput.substring(start, end + 1));
         } catch (e) {
-            throw new Error('O modelo não retornou um JSON válido: ' + rawOutput);
+            throw new Error('Modelo não retornou JSON válido: ' + rawOutput.substring(0, 300));
         }
     }
 
@@ -464,11 +419,6 @@ Responda EXCLUSIVAMENTE em formato JSON VÁLIDO. Siga a estrutura:
 
         const nestedResults = await Promise.all(keywords.map(kw => fetchSingle(kw)));
         return nestedResults.flat();
-    }
-
-    // Helper: TikTok Video Search (RapidAPI) - DEPRECATED (repleced by Multi) 
-    async function fetchAndRenderTikTokVideos(keywords) {
-        return fetchAndRenderWebGallery(keywords);
     }
 
     // Helper: Download e Importação no Premiere 

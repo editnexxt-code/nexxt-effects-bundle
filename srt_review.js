@@ -2,21 +2,16 @@
  * SRT AI REVIEW — NEXXT EFFECTS
  * Architecture: Separation & Reconstruction
  *   1. parseSrt()           → [{id, start, end, text}]
- *   2. callReplicate()      → send only text[]  as JSON, receive corrected text[] as JSON
+ *   2. callGroq()           → send only text[] as JSON, receive corrected text[] as JSON
  *   3. parseOllamaResponse() → safely extract the JSON array (3-layer fallback)
  *   4. reconstructSrt()     → merge corrected texts back with original timestamps
  *   5. importSrtToPremiere() → save to %TEMP% and push to Premiere Project panel
- *
- * REQUIRES: Replicate API configured
  */
 (function () {
     /* ------------------------------------------------------------------
        CONFIG
     ------------------------------------------------------------------ */
-    const REPLICATE_KEY = 'REPLICATE_API_KEY_HERE';
-    const REPLICATE_MODEL = 'meta/meta-llama-3-8b-instruct'; // Fallback / default
-    const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-    const CHUNK_SIZE = 15; // subtitle blocks per API call
+    const CHUNK_SIZE = 50; // subtitle blocks per Groq call (8K ctx handles 50+ easily)
 
     const SYSTEM_PROMPT =
         'You are a JSON text corrector. ' +
@@ -143,203 +138,62 @@
     }
 
     /* ------------------------------------------------------------------
-       3. CALL REPLICATE — send only text[], get back corrected text[]
-       Uses Replicate predictions polling.
+       3. CALL GROQ — send only text[], get back corrected text[]
+       Uses Groq chat completions (LLaMA 3.1 8B Instant).
        The LLM NEVER sees timestamps or index numbers.
     ------------------------------------------------------------------ */
-    async function callReplicate(textsArray, contextMemory) {
-        if (!REPLICATE_KEY) throw new Error('Chave da Replicate API não configurada.');
+    async function callGroq(textsArray, contextMemory) {
+        const apiKey = (localStorage.getItem('groq_api_key') || '').trim();
+        if (!apiKey) throw new Error('Chave Groq não configurada. Acesse Configurações e insira sua chave Groq.');
 
         const systemWithContext = contextMemory
             ? `[STYLE CONTEXT — do NOT correct, use only for style/name consistency]: ${contextMemory}\n\n${SYSTEM_PROMPT}`
             : SYSTEM_PROMPT;
 
-        const userMessage =
-            'Correct ONLY grammar and spelling. ' +
-            'Return ONLY a raw JSON array of strings (no markdown, no explanation). ' +
-            `INPUT:\n${JSON.stringify(textsArray)}`;
-
-        const promptTemplate =
-            `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-${systemWithContext}<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-${userMessage}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
-
-        const payload = {
-            input: {
-                prompt: promptTemplate,
-                max_tokens: 4096,
-                temperature: 0.05,
-                top_p: 0.1
-            }
-        };
-
-        // ================================================================
-        // RETRY COM BACKOFF EXPONENCIAL
-        // Tenta 3 vezes com intervalos de 5s, 10s, 20s entre tentativas.
-        // Isso resolve o erro 429/402 que ocorre quando múltiplos usuários
-        // usam a mesma chave API simultaneamente.
-        // ================================================================
         const MAX_RETRIES = 3;
-        const BACKOFF_DELAYS = [5000, 10000, 20000]; // 5s, 10s, 20s
-
+        const BACKOFF_DELAYS = [3000, 6000, 12000];
         let lastError = null;
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            if (_cancelled) throw new Error("Cancelado pelo usuário.");
-
-            const response = await fetch('https://api.replicate.com/v1/models/meta/meta-llama-3-8b-instruct/predictions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Token ${REPLICATE_KEY}`,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'wait' // Ask Replicate to wait if possible
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || data.error) {
-                // Extrai mensagem de erro em qualquer formato que a Replicate retorne
-                const errMsg = data.error || data.detail || data.message
-                    || (response.statusText && response.statusText !== '' ? response.statusText : null)
-                    || `HTTP ${response.status}`;
-
-                if (response.status === 429 || response.status === 402) {
-                    lastError = new Error('Servidores Replicate ocupados. Tentando novamente...');
-                    if (attempt < MAX_RETRIES) {
-                        const delay = BACKOFF_DELAYS[attempt];
-                        console.log(`[SRT Review] Rate limit (${response.status}), retry ${attempt + 1}/${MAX_RETRIES} in ${delay / 1000}s...`);
-                        updateProgress(-1, `⏳ Servidor ocupado — tentando novamente em ${delay / 1000}s... (${attempt + 1}/${MAX_RETRIES})`);
-                        await new Promise(r => setTimeout(r, delay));
-                        continue;
-                    }
-                    throw new Error('Servidores Replicate ocupados após 3 tentativas. Tente novamente em alguns minutos.');
-                }
-                throw new Error(`Replicate (${response.status}): ${errMsg}`);
-            }
-
-            // Success — continue with the rest of the function
-            var successData = data;
-            break;
-        }
-
-        if (!successData) throw lastError || new Error('Erro desconhecido na API Replicate.');
-
-        let predictionId = successData.id;
-        let predictionStatus = successData.status;
-        let outputText = "";
-
-        // Wait / poll until done
-        let attempts = 0;
-        while (predictionStatus !== 'succeeded' && predictionStatus !== 'failed' && predictionStatus !== 'canceled') {
-            if (_cancelled) throw new Error("Cancelado pelo usuário.");
-
-            // We use Prefer: wait from Replicate, but if it takes too long, we poll
-            await new Promise(r => setTimeout(r, 2000));
-            attempts++;
-            if (attempts > 30) throw new Error("Timeout na Replicate API (> 60s).");
-
-            const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-                headers: { 'Authorization': `Token ${REPLICATE_KEY}` }
-            });
-            const pollData = await pollRes.json();
-            predictionStatus = pollData.status;
-
-            if (predictionStatus === 'succeeded') {
-                if (Array.isArray(pollData.output)) {
-                    outputText = pollData.output.join("");
-                } else if (typeof pollData.output === 'string') {
-                    outputText = pollData.output;
-                }
-            } else if (predictionStatus === 'failed' || predictionStatus === 'canceled') {
-                throw new Error(`Replicate run ${predictionStatus}: ${pollData.error || ''}`);
-            }
-        }
-
-        if (!outputText && successData.output) {
-            outputText = Array.isArray(successData.output) ? successData.output.join("") : successData.output;
-        }
-
-        return outputText || '';
-    }
-
-    /* ------------------------------------------------------------------
-       3.5 GEMINI 3 FLASH CALL — callGeminiFlash(textArray)
-       Uses Structured Outputs (responseSchema) to guarantee a JSON array.
-    ------------------------------------------------------------------ */
-    async function callGeminiFlash(textArray, apiKey) {
-        if (!apiKey) throw new Error('Chave da Gemini API não configurada.');
-
-        const payload = {
-            systemInstruction: {
-                parts: [{ text: "You are a machine that corrects subtitles. You MUST output ONLY a JSON array of strings exactly matching the input length. Correct spelling and grammar. Preserve HTML tags like <font color=...>. Do not summarize or add conversational text." }]
-            },
-            contents: [{ parts: [{ text: JSON.stringify(textArray) }] }],
-            generationConfig: {
-                temperature: 0.1,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "ARRAY",
-                    items: { type: "STRING" }
-                }
-            }
-        };
-
-        // Retry automático para 503/529 (alta demanda no Gemini)
-        const GEMINI_MAX_RETRIES = 3;
-        const GEMINI_BACKOFF = [4000, 8000, 16000]; // 4s, 8s, 16s
-        let lastGeminiError = null;
-
-        for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
             if (_cancelled) throw new Error('Cancelado pelo usuário.');
 
-            const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'llama-3.1-8b-instant',
+                    messages: [
+                        { role: 'system', content: systemWithContext },
+                        { role: 'user', content: 'Correct ONLY grammar and spelling. Return ONLY a raw JSON array of strings (no markdown, no explanation).\nINPUT:\n' + JSON.stringify(textsArray) }
+                    ],
+                    max_tokens: 4096,
+                    temperature: 0.05
+                })
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errText = await response.text().catch(() => '');
-
-                // Extrai mensagem limpa do JSON de erro (evita mostrar JSON cru pro usuário)
-                let cleanMsg = errText;
-                try {
-                    const errData = JSON.parse(errText);
-                    cleanMsg = errData?.error?.message || errData?.message || errText;
-                } catch (_) { }
-
-                if (response.status === 503 || response.status === 529) {
-                    lastGeminiError = new Error(`Gemini com alta demanda. Tente novamente em instantes.`);
-                    if (attempt < GEMINI_MAX_RETRIES) {
-                        const delay = GEMINI_BACKOFF[attempt];
-                        console.log(`[SRT Review] Gemini ${response.status}, retry ${attempt + 1}/${GEMINI_MAX_RETRIES} in ${delay / 1000}s...`);
-                        updateProgress(-1, `⏳ Gemini sobrecarregado — nova tentativa em ${delay / 1000}s... (${attempt + 1}/${GEMINI_MAX_RETRIES})`);
+                const errMsg = data.error?.message || `HTTP ${response.status}`;
+                if (response.status === 429) {
+                    lastError = new Error('Groq rate limit. Tentando novamente...');
+                    if (attempt < MAX_RETRIES) {
+                        const delay = BACKOFF_DELAYS[attempt];
+                        updateProgress(-1, `⏳ Rate limit Groq — nova tentativa em ${delay / 1000}s... (${attempt + 1}/${MAX_RETRIES})`);
                         await new Promise(r => setTimeout(r, delay));
                         continue;
                     }
-                    throw new Error('Gemini com alta demanda após 3 tentativas. Use o botão Replicate Llama como alternativa.');
+                    throw new Error('Groq rate limit após 3 tentativas. Tente novamente em instantes.');
                 }
-
-                if (response.status === 429) {
-                    throw new Error('Cota Gemini excedida. Aguarde 1 minuto ou acesse console.cloud.google.com para verificar o plano.');
-                }
-
-                throw new Error(`Gemini (${response.status}): ${cleanMsg}`);
+                throw new Error(`Groq (${response.status}): ${errMsg}`);
             }
 
-            const data = await response.json();
-            if (data.candidates?.[0]?.content?.parts?.[0]) {
-                return data.candidates[0].content.parts[0].text;
-            }
-            return '';
+            return data.choices?.[0]?.message?.content || '';
         }
 
-        throw lastGeminiError || new Error('Erro desconhecido no Gemini.');
+        throw lastError || new Error('Erro desconhecido no Groq.');
     }
+
 
 
     /* ------------------------------------------------------------------
@@ -477,32 +331,17 @@ ${userMessage}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
         _contextMemory = '';
         _cancelled = false;
 
-        let geminiKey = null;
-
-        if (provider === 'gemini') {
-            geminiKey = localStorage.getItem('nexxt_gemini_key') || '';
-            if (!geminiKey) {
-                setLoading(false);
-                setStatus('❌ Chave da API Gemini não configurada nas Configurações.', 'error');
-                return;
-            }
-        } else {
-            // Verify Replicate Key (hardcoded)
-            try {
-                if (!REPLICATE_KEY) throw new Error('sem key configurada');
-            } catch (_) {
-                setLoading(false);
-                setStatus("❌ Falha na API Replicate.", 'error');
-                return;
-            }
+        const groqKey = (localStorage.getItem('groq_api_key') || '').trim();
+        if (!groqKey) {
+            setLoading(false);
+            setStatus('❌ Chave Groq não configurada. Acesse Configurações e insira sua chave Groq.', 'error');
+            return;
         }
 
         // Build chunks of block indices
         const allCorrectedTexts = new Array(_parsedBlocks.length);
 
-        // Gemini handles 1M+ tokens. Send everything in 1 massive chunk to avoid Rate Limits (5 RPM Free Tier).
-        // Ollama requires small chunks (CHUNK_SIZE = 15) to save GPU/CPU memory.
-        const currentChunkSize = provider === 'gemini' ? 1000 : CHUNK_SIZE;
+        const currentChunkSize = CHUNK_SIZE;
         const numChunks = Math.ceil(_parsedBlocks.length / currentChunkSize);
 
         try {
@@ -519,11 +358,7 @@ ${userMessage}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
 
                 // Dynamic dispatch based on provider
                 let rawResponse = '';
-                if (provider === 'gemini') {
-                    rawResponse = await callGeminiFlash(chunkTexts, geminiKey);
-                } else {
-                    rawResponse = await callReplicate(chunkTexts, _contextMemory);
-                }
+                rawResponse = await callGroq(chunkTexts, _contextMemory);
 
                 const correctedTexts = parseOllamaResponse(rawResponse, chunkTexts);
 
@@ -591,7 +426,7 @@ ${userMessage}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
                 return;
             }
 
-            setStatus(`✅ "${file.name}" — ${_parsedBlocks.length} blocos carregados. Escolha o método (Gemini Rápido ou Replicate)...`, 'success');
+            setStatus(`✅ "${file.name}" — ${_parsedBlocks.length} blocos carregados. Escolha o método de revisão.`, 'success');
         };
         reader.onerror = () => setStatus('❌ Falha ao ler o arquivo.', 'error');
         reader.readAsText(file, 'UTF-8');
@@ -637,13 +472,11 @@ ${userMessage}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
             if (file) loadSrtFile(file);
         });
 
-        const btnGemini = $('btn-srt-review-gemini');
         const btnReplicate = $('btn-srt-review-replicate');
         const btnApply = $('btn-srt-apply');
         const btnSave = $('btn-srt-save');
         const btnCancel = $('btn-srt-cancel');
 
-        if (btnGemini) btnGemini.addEventListener('click', () => reviewWithIA('gemini'));
         if (btnReplicate) btnReplicate.addEventListener('click', () => reviewWithIA('local'));
         if (btnApply) btnApply.addEventListener('click', () => importSrtToPremiere(_correctedSrt, _originalName));
         if (btnSave) btnSave.addEventListener('click', () => importSrtToPremiere(_correctedSrt, _originalName));
