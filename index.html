@@ -6,7 +6,7 @@
     <title>Nexxt Effects</title>
     <script src="./CSInterface.js"></script>
 
-    <!-- NEXXT SECURITY GUARD: Anti-DevTools & Debugger Trap -->
+    <!-- NEXXT SECURITY GUARD -->
     <script>
         (function () {
             // Block Context Menu (Right Click)
@@ -25,15 +25,6 @@
                     return false;
                 }
             });
-
-            // Debugger Trap: Causes an infinite loop if DevTools are open
-            // setInterval(() => { debugger; }, 100); 
-            // NOTE: Uncommented would freeze, but a softer approach is to detect and crash
-            const detectDevTool = new Function(
-                "debugger;",
-                "const t = new Date(); debugger; if (new Date() - t > 100) { document.body.innerHTML = '<h1>Security Violation: DevTools Detected</h1>'; }"
-            );
-            setInterval(detectDevTool, 1000);
         })();
     </script>
 
@@ -6845,4 +6836,4 @@
 
 </body>
 
-</html
+</html>
