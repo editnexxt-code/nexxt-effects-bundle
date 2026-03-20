@@ -125,7 +125,11 @@
             return;
         }
 
-        const key = "REPLICATE_API_KEY_HERE";
+        const key = localStorage.getItem('nexxt_replicate_key') || '';
+        if (!key) {
+            notify('Chave Replicate não configurada. Acesse Configurações e insira sua chave Replicate.', 'error');
+            return;
+        }
 
         toggleLoading(true);
         setStatus('Starting generation...');

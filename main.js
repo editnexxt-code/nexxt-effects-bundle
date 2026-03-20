@@ -130,7 +130,7 @@ let heygenCurrentPath = [{ id: null, name: 'Galeria' }];
 let heygenAllVideos = [];
 let heygenCurrentFilter = 'all';
 let groqKey = localStorage.getItem('groq_api_key') || '';
-let replicateKey = "REPLICATE_API_KEY_HERE";
+let replicateKey = localStorage.getItem('nexxt_replicate_key') || '';
 
 // Toggle States
 let autoBleepNSFW = localStorage.getItem("auto_bleep_nsfw") === "true";
@@ -514,6 +514,7 @@ window.onload = () => {
             ['settings-path-nsfw', userNSFWPath],
             ['settings-api-groq', localStorage.getItem('groq_api_key')],
             ['settings-api-heygen', heygenKey],
+            ['settings-api-replicate', localStorage.getItem('nexxt_replicate_key')],
             ['settings-api-gemini', localStorage.getItem('nexxt_gemini_key')],
             ['settings-path-srt', localStorage.getItem('nexxt_srt_path')]
         ];
@@ -807,6 +808,9 @@ function salvarConfiguracoesGlobais() {
 
     const hgStr = document.getElementById('settings-api-heygen').value.trim();
     if (hgStr) { heygenKey = hgStr; localStorage.setItem("heygen_api_key", heygenKey); }
+
+    const repStr = document.getElementById('settings-api-replicate') && document.getElementById('settings-api-replicate').value.trim();
+    if (repStr) { replicateKey = repStr; localStorage.setItem('nexxt_replicate_key', replicateKey); }
 
     const gmStr = document.getElementById('settings-api-gemini') && document.getElementById('settings-api-gemini').value.trim();
     if (gmStr) { localStorage.setItem("nexxt_gemini_key", gmStr); }
@@ -2832,9 +2836,9 @@ if (btnAccordionEffects && navAccordionEffects) {
     if (!btn) return;
 
     btn.addEventListener('click', async function () {
-        // --- Guard: Replicate key (usa a variável global hardcoded) ---
+        // --- Guard: Replicate key ---
         if (!replicateKey) {
-            notify('Chave API do Replicate não encontrada. Contate o suporte.', 'error');
+            notify('Chave Replicate não configurada. Acesse Configurações e insira sua chave Replicate.', 'error');
             return;
         }
 
@@ -3728,6 +3732,11 @@ async function activateLicense() {
                 ? 'Limite atingido! Você usou todos os ' + usageCheck.limit + ' vídeos do plano ' + usageCheck.plan + ' este mês.'
                 : 'Não foi possível verificar sua quota. Tente novamente.';
             klingSetStatus(usageMsg, 'error');
+            return;
+        }
+
+        if (!replicateKey) {
+            klingSetStatus('Chave Replicate não configurada. Acesse Configurações e insira sua chave Replicate.', 'error');
             return;
         }
 

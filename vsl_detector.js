@@ -22,7 +22,7 @@
         return (typeof groqKey !== 'undefined' && groqKey) ? groqKey : '';
     }
     function getReplicateKey() {
-        return localStorage.getItem('nexxt_replicate_key') || 'REPLICATE_API_KEY_HERE';
+        return localStorage.getItem('nexxt_replicate_key') || '';
     }
 
     // ── MAIN ENTRY POINT ────────────────────────────────────────────────────────
@@ -365,9 +365,10 @@
         fd.append('response_format', 'verbose_json');
         fd.append('timestamp_granularities[]', 'word');
 
-        if (typeof NEXXT_PROXY_URL === 'undefined') throw new Error('Proxy nao carregado.');
-        var resp = await fetch(NEXXT_PROXY_URL, {
-            method: 'POST', headers: { 'Authorization': 'Bearer ' + NEXXT_ANON_KEY }, body: fd
+        var gKey = getGroqKey();
+        if (!gKey) throw new Error('Chave Groq não configurada. Acesse Configurações e insira sua chave Groq.');
+        var resp = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST', headers: { 'Authorization': 'Bearer ' + gKey }, body: fd
         });
         var d = await resp.json();
 

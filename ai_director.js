@@ -89,39 +89,34 @@
         });
     };
 
-    // API: Whisper via Groq Proxy
+    // API: Whisper via Groq direto
     async function transcribeAudio(audioPath) {
         const fs = require('fs');
-        
-        // Ler como ArrayBuffer para o FormData
+        const apiKey = (localStorage.getItem('groq_api_key') || '').trim();
+        if (!apiKey) throw new Error('Chave Groq não configurada. Acesse Configurações e insira sua chave Groq.');
+
         const buffer = await fs.promises.readFile(audioPath);
         const arrayBuffer = new Uint8Array(buffer).buffer;
         const blob = new Blob([arrayBuffer], { type: 'audio/wav' });
-        
+
         const formData = new FormData();
         formData.append("file", blob, "audio.wav");
         formData.append("model", "whisper-large-v3-turbo");
-        formData.append("response_format", "verbose_json");
-        formData.append("timestamp_granularities[]", "word");
+        formData.append("response_format", "json");
 
-        // NEXXT_PROXY_URL e NEXXT_ANON_KEY vêm do auth.js/main.js
-        if (typeof NEXXT_PROXY_URL === 'undefined' || typeof NEXXT_ANON_KEY === 'undefined') {
-            throw new Error("Proxy de transcrição não carregado (auth.js ausente).");
-        }
-
-        const response = await fetch(NEXXT_PROXY_URL, {
+        const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
             method: "POST",
-            headers: { "Authorization": "Bearer " + NEXXT_ANON_KEY },
+            headers: { "Authorization": "Bearer " + apiKey },
             body: formData
         });
 
         const data = await response.json();
-        
+
         if (!response.ok || data.error) {
             throw new Error(data.error?.message || (typeof data.error === 'string' ? data.error : JSON.stringify(data.error)) || "Erro API Groq Whisper");
         }
 
-        return data.text || ''; // Groq verbose_json returns text in .text
+        return data.text || '';
     }
 
     // API: Direção de Arte via Groq (LLaMA-3)
