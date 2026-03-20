@@ -19,7 +19,23 @@
       "Bash(curl -s https://api.github.com/repos/Adobe-CEP/CEP-Resources/contents/)",
       "Bash(unzip -l \"/Users/nexxtedit/Desktop/NexxtEffectsBundle_v2.0.2_mac.zxp\")",
       "Bash(find '/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle' -type f -name *.yml -o -name *.yaml -o -name Makefile -o -name *release* -o -name *update*)",
-      "Bash(grep -r \"github.com\\\\|gitlab.com\\\\|bitbucket\" '/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle' --include=*.js --include=*.json)"
+      "Bash(grep -r \"github.com\\\\|gitlab.com\\\\|bitbucket\" '/Users/nexxtedit/Library/Application Support/Adobe/CEP/extensions/Nexxt Effects Bundle' --include=*.js --include=*.json)",
+      "Bash(PLUGIN_DIR=\"/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle\")",
+      "Read(//Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle/**)",
+      "Bash(/opt/homebrew/bin/gh release:*)",
+      "Bash(npm install:*)",
+      "Bash(bash release_mac.sh 2.0.8 \"Fix instalacao MOGRTs \\(botao reinstalar funcional + URL v1.1.1\\), VSL detecta potes HunterPower/Slim Jara/qualquer produto, limpeza de arquivos desnecessarios no ZXP\")",
+      "Bash(/opt/homebrew/bin/gh api:*)",
+      "Bash(bash release_mac.sh 2.0.8 \"VSL Detector reconstruido: detecta qualquer produto/pote na tela \\(Llama 4 Scout, 90 frames, cobertura total\\); botao Reinstalar MOGRTs funcional com download automatico; correcoes gerais Mac\")",
+      "Bash(grep -rn \"whisperx_transcribe\\\\|requirements\\\\.txt\" /Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle/*.js)",
+      "Bash('P=/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle' grep -n \"whisperx_transcribe\\\\|requirements\\\\.txt\" $P/captions.js $P/ai_director.js $P/main.js)",
+      "Bash('P=/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle' grep -rn \"whisperx\\\\|requirements\" $P/captions.js $P/ai_director.js $P/vsl_detector.js $P/main.js)",
+      "Bash(P=\"/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/CEP/extensions/Nexxt Effects Bundle\" __NEW_LINE_6a66215a7ed09759__ rm \"$P/nexxt-cert.p12\")",
+      "Bash(echo \"✓ nexxt-cert.p12 removido\" rm \"$P/tools/requirements.txt\")",
+      "Bash(echo \"✓ tools/requirements.txt removido\" rm \"$P/tools/whisperx_transcribe.py\")",
+      "Bash(echo \"✓ tools/whisperx_transcribe.py removido\" rm \"$P/build_zxp.sh\")",
+      "Bash(echo \"✓ build_zxp.sh removido\" rm \"$P/package-lock.json\")",
+      "Bash(echo \"✓ package-lock.json removido\" __NEW_LINE_6a66215a7ed09759__ echo \"\" echo \"=== Estrutura final ===\" ls -lh \"$P/\")"
     ]
   }
 }

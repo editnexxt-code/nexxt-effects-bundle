@@ -1,6 +1,0 @@
-# Nexxt Captions — WhisperX Dependencies
-# Install: pip install -r requirements.txt
-
-whisperx
-torch
-torchaudio
