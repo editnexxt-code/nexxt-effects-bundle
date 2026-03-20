@@ -277,46 +277,53 @@ UPDATE_DOWNLOAD_URL="https://github.com/${GH_REPO}/releases/download/${TAG}/${UP
 ok "Release publicada: $TAG"
 
 # ── ATUALIZAR version_mac.json NO REPO DE RELEASES ───────────────────────────
-info "Atualizando version_mac.json no repositório de releases..."
+info "Atualizando version.json no repositório de releases..."
 RELEASES_CLONE="/tmp/nexxt_releases_clone_$$"
 /opt/homebrew/bin/gh repo clone "$GH_REPO" "$RELEASES_CLONE" -- --quiet 2>/dev/null || git clone "https://github.com/${GH_REPO}.git" "$RELEASES_CLONE" --quiet
 
 node -e "
 const fs = require('fs');
-const path = '$RELEASES_CLONE/version_mac.json';
+// Atualiza version.json (arquivo que o plugin lê para checar atualizações)
+const vPath = '$RELEASES_CLONE/version.json';
+let vFull = {};
+try { vFull = JSON.parse(fs.readFileSync(vPath, 'utf8')); } catch(e) { }
+if (!vFull.mac) vFull.mac = {};
+if (!vFull.windows) vFull.windows = {};
+vFull.mac = {
+  version: '$VERSION',
+  url: '$PKG_DOWNLOAD_URL',
+  update_url: '$UPDATE_DOWNLOAD_URL',
+  changelog: ['$CHANGELOG'],
+  date: '$TODAY'
+};
+vFull.version = '$VERSION';
+vFull.url = '$PKG_DOWNLOAD_URL';
+vFull.changelog = ['$CHANGELOG'];
+fs.writeFileSync(vPath, JSON.stringify(vFull, null, 2));
+console.log('version.json atualizado');
 
-// Ler version.json completo e atualizar seção mac
-let full = {};
-try { full = JSON.parse(fs.readFileSync(path, 'utf8')); } catch(e) { }
-
-// Suporte ao formato { mac: {...}, windows: {...} } e formato legado
-if (full.mac) {
-  full.mac = {
-    version: '$VERSION',
-    url: '$PKG_DOWNLOAD_URL',
-    update_url: '$UPDATE_DOWNLOAD_URL',
-    changelog: ['$CHANGELOG'],
-    date: '$TODAY'
-  };
-} else {
-  full = {
-    version: '$VERSION',
-    url: '$PKG_DOWNLOAD_URL',
-    update_url: '$UPDATE_DOWNLOAD_URL',
-    changelog: ['$CHANGELOG'],
-    date: '$TODAY'
-  };
-}
-fs.writeFileSync(path, JSON.stringify(full, null, 2));
+// Atualiza também version_mac.json (backup)
+const mPath = '$RELEASES_CLONE/version_mac.json';
+let mFull = {};
+try { mFull = JSON.parse(fs.readFileSync(mPath, 'utf8')); } catch(e) { }
+if (!mFull.mac) mFull.mac = {};
+mFull.mac = {
+  version: '$VERSION',
+  url: '$PKG_DOWNLOAD_URL',
+  update_url: '$UPDATE_DOWNLOAD_URL',
+  changelog: ['$CHANGELOG'],
+  date: '$TODAY'
+};
+fs.writeFileSync(mPath, JSON.stringify(mFull, null, 2));
 console.log('version_mac.json atualizado');
 "
 
 cd "$RELEASES_CLONE"
-git add version_mac.json
+git add version.json version_mac.json
 git commit -m "release: Mac v${VERSION} (PKG + update ZIP)" 2>/dev/null || true
 git push origin main --quiet 2>/dev/null || git push --quiet 2>/dev/null
 cd - > /dev/null
-ok "version_mac.json publicado"
+ok "version.json e version_mac.json publicados"
 
 # ── LIMPAR STAGING ────────────────────────────────────────────────────────────
 rm -rf "$STAGING" "$UPDATE_STAGING" "$RELEASES_CLONE" 2>/dev/null || true
