@@ -101,7 +101,8 @@ ok "vari-assets copiados ($ASSETS_SIZE)"
 # ── BAIXAR E EXTRAIR MOGRTs ───────────────────────────────────────────────────
 info "Baixando Nexxt_Mogrts.zip..."
 curl -L --progress-bar "$MOGRTS_URL" -o "/tmp/nexxt_mogrts_$$.zip" || die "Falha no download dos MOGRTs"
-unzip -o -q "/tmp/nexxt_mogrts_$$.zip" -d "$STAGING/mogrts/"
+# ditto lida corretamente com filenames Unicode/emoji no macOS
+ditto -x -k "/tmp/nexxt_mogrts_$$.zip" "$STAGING/mogrts/"
 rm -f "/tmp/nexxt_mogrts_$$.zip"
 MOGRT_COUNT=$(find "$STAGING/mogrts" -name "*.mogrt" | wc -l | tr -d ' ')
 ok "MOGRTs extraídos ($MOGRT_COUNT arquivos)"
